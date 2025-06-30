@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Serrano Lab Training Matrix</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link href="https://fonts.googleapis.com/css?family=Inter:400,600,700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: "Inter", Arial, sans-serif; background: #f8fafd; color: #233145; margin: 0 0 3em; font-size: 1.08em;}
+    #header { display: flex; align-items: center; background: #fff; padding: 2em; box-shadow: 0 2px 8px rgba(31,116,175,0.07); margin-bottom: 2em; }
+    #logo { height: 54px; width: 54px; margin-right: 1.2em; }
+    #brand { font-size: 2em; color: #1F74AF; font-weight: 600; }
+    .button-row { display: flex; justify-content: center; gap: 1.5em; margin: 2em 0; }
+    .main-btn { background: #1F74AF; color: #fff; border: none; border-radius: 7px; font-size: 1.09em; font-weight: 600; padding: 0.56em 2.25em; cursor: pointer; }
+    .main-btn:hover { background: #E05928; }
+    .instructions { background: #fff; padding: 1.8em; margin: 2em auto; max-width: 720px; border-left: 4px solid #1F74AF; border-radius: 9px; }
+    .category { background: #45C5E2; color: #fff; padding: 1em 1.4em; margin: 2em 0 0.3em; border-radius: 8px 8px 0 0; font-size: 1.15em; cursor: pointer; }
+    .category.active { background: #1F74AF; }
+    .content { display: none; background: #fff; border-radius: 0 0 11px 11px; padding: 0; margin-bottom: 2em; }
+    .topic { font-weight: 500; background: #f6fafb; padding: 0.2em; border-left: 3px solid #45C5E2; border-radius: 4px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 1em; }
+    th, td { border: 1px solid #e4e8f1; padding: 0.6em; text-align: left; }
+    th { background: #f6fafb; color: #1F74AF; }
+    tr:nth-child(even) { background: #fafdff; }
+    select.status { font-weight: 600; border: none; background: #f3fafd; padding: 0.15em 0.5em; border-radius: 5px; }
+    input[type="checkbox"] { width: 1.25em; height: 1.25em; accent-color: #1F74AF; }
+    #progressbar-wrap { margin: 2em auto; max-width: 720px; }
+    #progressbar { height: 18px; background: #45C5E2; border-radius: 10px; transition: width 0.2s; }
+    #progress-value { color: #fff; font-weight: 600; padding-left: 0.7em; }
+    #chart-wrap { margin: 1.5em auto; max-width: 620px; }
+    .mini-bar-wrap { background: #f2f8fc; border-radius: 6px; height: 11px; margin: 0.1em 0; }
+    .mini-bar { height: 11px; border-radius: 6px; background: #45C5E2; transition: width 0.2s; }
+    .branding-note { max-width: 600px; margin: 1.5em auto; font-size: 0.97em; color: #789; }
+    @media (max-width:700px) {
+      table, thead, tbody, th, td, tr { display: block; }
+      .button-row { flex-direction: column; }
+      .main-btn { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div id="header">
+    <img src="logo.png" id="logo" alt="Serrano Lab logo">
+    <span id="brand">Serrano Lab Training Matrix</span>
+  </div>
+
+  <!-- Mentee Name Field -->
+  <div style="max-width:480px;margin:0 auto 2em auto;text-align:center;">
+    <label style="font-weight:600;color:#1F74AF;">Mentee Name:
+      <input id="mentee-name" type="text" style="margin-left:0.7em;padding:0.32em 1em;border-radius:7px;border:1px solid #bbb;font-size:1.07em;" placeholder="Enter your full name" required>
+    </label>
+  </div>
+
+  <div class="button-row">
+    <button class="main-btn" id="download-btn">Download CSV</button>
+    <button class="main-btn" id="print-btn">Download PDF</button>
+    <button class="main-btn" id="send-btn">Send Progress</button>
+  </div>
+
+  <div class="instructions">
+    <ol>
+      <li>Enter your name and trainee level below. You’ll only see skills relevant to you plus core requirements.</li>
+      <li>Expand each section and update your progress for every skill and year. <span aria-live="polite">(Your progress is auto-saved.)</span></li>
+      <li>Attach evidence (URLs; semicolons) and any notes for each skill.</li>
+      <li>Click <b>Download CSV</b> to save, <b>Download PDF</b> to print, or <b>Send Progress</b> to submit.</li>
+    </ol>
+    <label><input type="radio" name="level" value="ug" checked> Undergraduate</label>
+    <label><input type="radio" name="level" value="phd"> PhD</label>
+    <label><input type="radio" name="level" value="postdoc"> Post-doc</label>
+    <label><input type="radio" name="level" value="staff"> Staff/Technician</label>
+  </div>
+
+  <div id="progressbar-wrap">
+    <div id="progressbar" style="width:0%"><span id="progress-value"></span></div>
+  </div>
+  <div id="chart-wrap"><canvas id="progressChart" width="600" height="280"></canvas></div>
+  <div id="matrix"></div>
+
+  <form id="matrixForm" action="https://formspree.io/f/xkgbpjoz" method="POST" style="display:none;">
+    <input type="email" name="email" id="emailField" required>
+    <textarea name="matrixCSV" id="matrixCSV"></textarea>
+  </form>
+  <div class="branding-note" id="copyright-note">
+    &copy; <span id="year"></span> Serrano Lab. All rights reserved.
+  </div>
+  <script>
+    document.getElementById("year").textContent = new Date().getFullYear();
+  </script>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+  // ====== Replace below with your full mentoringAreas array! ======
+   // ==== Place your full mentoringAreas array here ====
+  // ==== CONFIG ====
+  const mentoringAreas = [
+    // 1. Core Lab Practices
+    {
+      group: "Core Lab Practices (Everyone)",
+      topics: [
+        { topic: "Lab Safety & Biosafety", skills: [
+            { name: "EHS & BSL-2 Certification", level: ["ug","phd","postdoc","staff"] },
+            { name: "Incident Reporting & PPE",      level: ["ug","phd","postdoc","staff"] }
+        ]},
+        { topic: "Responsible Conduct & Integrity", skills: [
+            { name: "Authorship & Ethics",          level: ["ug","phd","postdoc","staff"] },
+            { name: "Conflict-of-Interest Disclosure", level: ["ug","phd","postdoc","staff"] }
+        ]},
+        { topic: "Data Stewardship & FAIR", skills: [
+            { name: "Backups & File Naming",        level: ["ug","phd","postdoc","staff"] },
+            { name: "Metadata & Repository Submission", level: ["ug","phd","postdoc","staff"] },
+            { name: "Git/GitHub & Zenodo",          level: ["ug","phd","postdoc","staff"] }
+        ]},
+        { topic: "Open Science Practices", skills: [
+            { name: "Protocols.io, Notebooks, Docker", level: ["ug","phd","postdoc","staff"] }
+        ]},
+        { topic: "EDIA & Accessibility", skills: [
+            { name: "Bystander Intervention & DEIA",  level: ["ug","phd","postdoc","staff"] }
+        ]},
+        { topic: "Team Communication", skills: [
+            { name: "Stand-ups & Task Boards",       level: ["ug","phd","postdoc","staff"] },
+            { name: "Constructive Feedback",         level: ["ug","phd","postdoc","staff"] }
+        ]},
+        { topic: "Meetings & Journal Clubs", skills: [
+            { name: "Data Presentation",             level: ["ug","phd","postdoc","staff"] },
+            { name: "Article Appraisal",             level: ["ug","phd","postdoc","staff"] }
+        ]},
+        { topic: "Patient Engagement", skills: [
+            { name: "Plain-Language Summaries",      level: ["ug","phd","postdoc","staff"] },
+            { name: "Respectful Language",           level: ["ug","phd","postdoc","staff"] }
+        ]}
+      ]
+    },
+
+    // 2. Personal & Professional Development
+    {
+      group: "Personal & Professional Development",
+      topics: [
+        { topic: "Personal Development", skills: [
+            { name: "IDP Planning",                 level: ["ug","phd","postdoc","staff"] },
+            { name: "Time Management",              level: ["ug","phd","postdoc","staff"] },
+            { name: "Resilience & Coping",          level: ["phd","postdoc","staff"] },
+            { name: "Inclusive Lab Culture",        level: ["ug","phd","postdoc","staff"] }
+        ]},
+        { topic: "Professional Growth", skills: [
+            { name: "Abstract & Poster Writing",    level: ["ug","staff"] },
+            { name: "Grant & Manuscript Writing",   level: ["phd","postdoc"] },
+            { name: "Science Communication",        level: ["ug","phd","postdoc","staff"] },
+            { name: "RCR Training",                 level: ["ug","phd","postdoc","staff"] },
+            { name: "Career Planning",              level: ["phd","postdoc","staff"] },
+            { name: "Budget Prep & Resource Mgt",   level: ["phd","postdoc","staff"] }
+        ]},
+        { topic: "Leadership & Mentoring", skills: [
+            { name: "Peer Collaboration",           level: ["ug"] },
+            { name: "Undergrad Mentoring",          level: ["phd","postdoc","staff"] },
+            { name: "Network Building",             level: ["phd","postdoc"] },
+            { name: "Lab Management",               level: ["postdoc","staff"] }
+        ]}
+      ]
+    },
+
+    // 3. Technical & Research Skills
+    {
+      group: "Technical & Research Skills",
+      topics: [
+        { topic: "Cell & Molecular Biology", skills: [
+            { name: "Sterile Technique & Culture",  level: ["ug","staff"] },
+            { name: "iPSC Maintenance",             level: ["ug","phd","postdoc","staff"] },
+            { name: "2D/3D Differentiation",        level: ["phd","postdoc","staff"] },
+            { name: "Advanced Methods (Flow, qPCR)", level: ["phd","postdoc","staff"] }
+        ]},
+        { topic: "Zebrafish Techniques", skills: [
+            { name: "Breeding & Genotyping",        level: ["ug","phd","staff"] },
+            { name: "Microinjection & Imaging",     level: ["phd","postdoc","staff"] }
+        ]},
+        { topic: "Data & Visualization", skills: [
+            { name: "FAIR Data Principles",         level: ["ug","phd","postdoc","staff"] },
+            { name: "Stats & Experimental Design",  level: ["phd","postdoc","staff"] },
+            { name: "Image Analysis & Tracking",    level: ["phd","postdoc","staff"] }
+        ]},
+        { topic: "Computational Biology", skills: [
+            { name: "R/Python Basics",              level: ["ug","phd","staff"] },
+            { name: "Single-Cell RNAseq",           level: ["phd","postdoc","staff"] },
+            { name: "Machine Learning Models",      level: ["postdoc"] }
+        ]}
+      ]
+    },
+
+    // 4. Scientific Communication & Engagement
+    {
+      group: "Scientific Communication & Patient Engagement",
+      topics: [
+        { topic: "Science Communication", skills: [
+            { name: "Presentation & Posters",       level: ["ug","phd","postdoc","staff"] },
+            { name: "Non-Scientific Audiences",     level: ["phd","postdoc","staff"] },
+            { name: "Advocacy Group Engagement",    level: ["phd","postdoc","staff"] }
+        ]},
+        { topic: "Ethics & Advocacy", skills: [
+            { name: "Patient Recruitment/Consent",  level: ["phd","postdoc","staff"] },
+            { name: "Biobanking & Samples",         level: ["phd","postdoc","staff"] }
+        ]},
+        { topic: "Open Science Tools", skills: [
+            { name: "GitHub Actions & Quarto CI",   level: ["phd","postdoc","staff"] },
+            { name: "Protocol Sharing & Provenance",level: ["phd","postdoc","staff"] }
+        ]}
+      ]
+    },
+
+    // 5. Academic & Clinical Training
+    {
+      group: "Academic & Clinical Training",
+      topics: [
+        { topic: "Formal Education", skills: [
+            { name: "Graduate Coursework",          level: ["phd"] },
+            { name: "Translational Research Methods", level: ["postdoc"] }
+        ]},
+        { topic: "Clinical Exposure", skills: [
+            { name: "Rare Disease Clinic Shadowing", level: ["phd"] },
+            { name: "Grand Rounds Participation",   level: ["phd","postdoc"] },
+            { name: "Patient-Partnered Research",    level: ["postdoc"] }
+        ]},
+        { topic: "Seminars & Clubs", skills: [
+            { name: "Lab Meetings & Colloquia",     level: ["ug","phd","postdoc","staff"] },
+            { name: "CReM Seminar Series",          level: ["phd","postdoc","staff"] },
+            { name: "Journal Club Contributions",   level: ["phd","postdoc"] }
+        ]}
+      ]
+    },
+
+    // 6. Progress Monitoring & Feedback
+    {
+      group: "Progress Monitoring & Feedback",
+      topics: [
+        { topic: "Regular Evaluations", skills: [
+            { name: "Weekly 1:1 Meetings",           level: ["ug","phd","postdoc","staff"] },
+            { name: "Bi-Annual Committee Meetings",  level: ["phd","postdoc"] },
+            { name: "Annual Staff Reviews",          level: ["staff"] }
+        ]},
+        { topic: "Feedback & Reflection", skills: [
+            { name: "Peer & Mentor Feedback",        level: ["ug","phd","postdoc","staff"] },
+            { name: "Self-Assessment Practices",     level: ["phd","postdoc","staff"] }
+        ]}
+      ]
+    },
+
+    // 7. Laboratory Operations & Technical Staff Development
+    {
+      group: "Laboratory Operations & Technical Staff Development",
+      topics: [
+        { topic: "Instrumentation & Facility Mgt", skills: [
+            { name: "Flow Cytometer QC",             level: ["staff"] },
+            { name: "Confocal Maintenance",          level: ["staff"] },
+            { name: "Zebrafish Facility Upkeep",     level: ["staff"] }
+        ]},
+        { topic: "Regulatory Compliance & Safety", skills: [
+            { name: "CLIA/OSHA Documentation",       level: ["staff"] },
+            { name: "IACUC/IBC Protocols",            level: ["staff"] },
+            { name: "Hazardous Shipping Training",    level: ["staff"] }
+        ]},
+        { topic: "Sample & Data Logistics", skills: [
+            { name: "LIMS & Inventory Management",   level: ["staff"] },
+            { name: "Chain-of-Custody Records",      level: ["staff"] }
+        ]},
+        { topic: "Protocol Optimization & SOPs", skills: [
+            { name: "Troubleshooting Assays",        level: ["staff"] },
+            { name: "SOP Drafting & Updates",        level: ["staff"] }
+        ]},
+        { topic: "Budgeting & Purchasing", skills: [
+            { name: "Quote Comparison & POs",        level: ["staff"] },
+            { name: "Vendor Negotiation",            level: ["staff"] },
+            { name: "Contract Tracking",             level: ["staff"] }
+        ]},
+        { topic: "Training & Onboarding", skills: [
+            { name: "Hands-on Student Training",      level: ["staff"] },
+            { name: "Technique Checklists",           level: ["staff"] }
+        ]},
+        { topic: "Project Coordination", skills: [
+            { name: "Gantt Chart Maintenance",       level: ["staff"] },
+            { name: "Equipment Scheduling",           level: ["staff"] }
+        ]}
+      ]
+    }
+  ];
+  const statuses = ["Not Started","In Progress","Blocked","Needs Refresh","Complete"];
+  const startYear = new Date().getFullYear();
+  const years = Array.from({length:6},(_,i)=>startYear+i);
+  const VERSION = "1.1";
+  const formspreeEndpoint = "https://formspree.io/f/xkgbpjoz";
+  let traineeLevel = "ug";
+
+  document.querySelectorAll('input[name="level"]').forEach(radio => {
+    radio.addEventListener('change', e => {
+      traineeLevel = e.target.value;
+      buildMatrix();
+      loadState();
+      styleStatusCells();
+      updateProgress();
+      initCollapsibles();
+      updateRowProgress();
+    });
+  });
+
+  function buildMatrix() {
+    const container = document.getElementById('matrix');
+    container.innerHTML = '';
+    mentoringAreas.forEach(area => {
+      if(area.group.includes("Technical Staff") && traineeLevel !== "staff") return;
+      const btn = document.createElement('button');
+      btn.className = 'category';
+      btn.textContent = area.group;
+      btn.setAttribute('aria-expanded','false');
+      container.appendChild(btn);
+
+      const content = document.createElement('div');
+      content.className = 'content group';
+      let html = '<table><thead><tr>' +
+        '<th>Topic</th><th>Skill</th><th>Status</th>' +
+        '<th>Evidence URL(s)</th><th>Notes</th>' +
+        years.map(y=>`<th${y>startYear?' style="color:#bbb"':''}>${y}</th>`).join('') +
+        '<th>Progress</th><th>Completed 2022–2024</th></tr></thead><tbody>';
+      area.topics.forEach(topicObj => {
+        topicObj.skills.forEach(skill => {
+          if(!skill.level.includes(traineeLevel)) return;
+          html += `<tr>
+            <td class="topic">${topicObj.topic}</td>
+            <td>${skill.name}</td>
+            <td><select class="status">${statuses.map(s=>`<option>${s}</option>`).join('')}</select></td>
+            <td><input type="url" class="evidence" placeholder="https://…"></td>
+            <td><textarea class="row-notes" placeholder="Notes"></textarea></td>` +
+            years.map(_=>`<td><input type="checkbox" class="yearchk"></td>`).join('') +
+            '<td><div class="mini-bar-wrap"><div class="mini-bar"></div></div></td>' +
+            `<td><input type="checkbox" class="completed-past" title="Completed on 2022–2024"> <span style="font-size:0.94em;">2022–2024</span></td>` +
+          '</tr>';
+        });
+      });
+      html += '</tbody></table>';
+      content.innerHTML = html;
+      container.appendChild(content);
+    });
+    setTimeout(() => {
+      document.querySelectorAll('.completed-past').forEach(box => {
+        box.addEventListener('change', function() {
+          const row = this.closest('tr');
+          row.querySelectorAll('.yearchk').forEach(cb => cb.checked = this.checked);
+          // Update row mini progress bar immediately:
+          const boxes = Array.from(row.querySelectorAll('.yearchk'));
+          const pct = boxes.length ? Math.round(boxes.filter(b=>b.checked).length/boxes.length*100) : 0;
+          row.querySelector('.mini-bar').style.width = pct+'%';
+        });
+      });
+    }, 10);
+  }
+
+  function initCollapsibles() {
+    document.querySelectorAll('.category').forEach(btn => {
+      btn.onclick = () => {
+        btn.classList.toggle('active');
+        const nxt = btn.nextElementSibling;
+        nxt.style.display = nxt.style.display==='block'?'none':'block';
+        btn.setAttribute('aria-expanded', nxt.style.display==='block');
+      };
+    });
+    const first = document.querySelector('.category');
+    if(first) first.click();
+  }
+
+  function updateRowProgress() {
+    document.querySelectorAll('#matrix tbody tr').forEach(tr => {
+      const boxes = Array.from(tr.querySelectorAll('input.yearchk'));
+      const pct = boxes.length ? Math.round(boxes.filter(b=>b.checked).length/boxes.length*100) : 0;
+      tr.querySelector('.mini-bar').style.width = pct+'%';
+    });
+  }
+
+  function updateProgress() {
+    let total=0, done=0;
+    const areaTotals = {}, areaDone={};
+    mentoringAreas.forEach(a=>{
+      if(a.group.includes("Technical Staff") && traineeLevel!=='staff') return;
+      areaTotals[a.group]=0; areaDone[a.group]=0;
+    });
+    document.querySelectorAll('#matrix tbody tr').forEach(tr=>{
+      const area = tr.closest('.content.group').previousSibling.textContent;
+      const boxes = [...tr.querySelectorAll('input.yearchk')];
+      const stat = tr.querySelector('select.status').value;
+      boxes.forEach(b=>{
+        total++; areaTotals[area]++;
+        if(b.checked||stat==='Complete'){ done++; areaDone[area]++; }
+      });
+    });
+    const pct = total?Math.round(done/total*100):0;
+    document.getElementById('progressbar').style.width = pct+'%';
+    document.getElementById('progress-value').textContent = pct+'%';
+
+    const ctx = document.getElementById('progressChart').getContext('2d');
+    const data = Object.keys(areaTotals).map(k=> areaTotals[k]?Math.round(areaDone[k]/areaTotals[k]*100):0 );
+    if(!window.chartObj) {
+      window.chartObj = new Chart(ctx, {
+        type:'bar',
+        data:{ labels:Object.keys(areaTotals), datasets:[{ data, backgroundColor: '#45C5E2' }] },
+        options:{ plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true,max:100}}}
+      });
+    } else {
+      window.chartObj.data.datasets[0].data = data;
+      window.chartObj.update();
+    }
+  }
+
+  function exportCSV() {
+    const name = document.getElementById('mentee-name').value.trim();
+    if (!name) {
+      alert("Please enter your name before exporting.");
+      return;
+    }
+    const rows = [
+      [`#MatrixVersion=${VERSION}`],
+      ['Name','Level','Topic','Skill','Status','Evidence','Notes',...years,"Completed 2022–2024"]
+    ];
+    document.querySelectorAll('#matrix tbody tr').forEach(tr=>{
+      const tds = [...tr.querySelectorAll('td')];
+      const topic=tds[0].textContent, skill=tds[1].textContent;
+      const status=tr.querySelector('select.status').value;
+      const evidence=tr.querySelector('input.evidence').value;
+      const notes=tr.querySelector('textarea.row-notes').value;
+      const checks=[...tr.querySelectorAll('input.yearchk')].map(cb=>cb.checked?'✔':'');
+      const completedPast = tr.querySelector('.completed-past') && tr.querySelector('.completed-past').checked ? "✔" : "";
+      rows.push([name,traineeLevel,topic,skill,status,evidence,notes,...checks,completedPast].map(s=>`"${(s||'').replace(/"/g,'""')}"`));
+    });
+    const csv = rows.map(r=>r.join(',')).join('\n');
+    const blob = new Blob([csv],{type:'text/csv'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `serrano_matrix_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+  }
+  function sendProgress() {
+    const name = document.getElementById('mentee-name').value.trim();
+    if (!name) {
+      alert("Please enter your name before submitting.");
+      return;
+    }
+    exportCSV();
+    const email = prompt('Enter your email:');
+    if(!email) return;
+    document.getElementById('emailField').value = email;
+    document.getElementById('matrixCSV').value = ''; // You may add the CSV if you want to submit via POST
+    document.getElementById('matrixForm').submit();
+    alert('Training plan submitted. Thank you!');
+  }
+
+  function styleStatusCells() {
+    document.querySelectorAll('select.status').forEach(sel=>{
+      sel.onchange = ()=> sel.setAttribute('value', sel.value);
+      sel.onchange();
+    });
+  }
+
+  document.getElementById('download-btn').onclick = exportCSV;
+  document.getElementById('print-btn').onclick    = ()=>window.print();
+  document.getElementById('send-btn').onclick     = sendProgress;
+  document.addEventListener('change', ()=>{
+    updateRowProgress(); updateProgress();
+  });
+
+  buildMatrix();
+  initCollapsibles();
+  updateRowProgress();
+  updateProgress();
+  styleStatusCells();
+  </script>
+</body>
+</html>
