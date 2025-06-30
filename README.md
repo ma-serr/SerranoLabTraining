@@ -141,7 +141,7 @@ Contributions are welcome:
 
 ### 5. License & Attribution
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the [MIT License](https://opensource.org/license/mit).
 
 © Serrano Lab, Center for Regenerative Medicine (CReM), Boston University. Please attribute as above when using or adapting this tool.
 
